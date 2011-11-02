@@ -23,10 +23,23 @@
 // dunno this is good :(
 #define HZ 100
 
+#define SystemBasicInformation 0
+#define SystemPerformanceInformation 2
+#define SystemTimeInformation 3
+
+#define Li2Double(x) ((double)((x).HighPart) * 4.294967296E9 + (double)((x).LowPart))
+
 // Initialisation
 CpuMuninNodePlugin::CpuMuninNodePlugin()
 {
+  dbIdleTime = 0;
+  dbSystemTime = 0;
+  liOldIdleTime.QuadPart = 0;
+  liOldSystemTime.QuadPart = 0;
+  NtQuerySystemInformation = (PROCNTQSI)GetProcAddress(GetModuleHandle(_T("ntdll")), "NtQuerySystemInformation");
 
+  // Setup first call
+  CalculateCpuLoad();
 }
 
 CpuMuninNodePlugin::~CpuMuninNodePlugin()
@@ -81,8 +94,61 @@ int CpuMuninNodePlugin::GetConfig(char *buffer, int len)
   return 0;
 }
 
+void CpuMuninNodePlugin::CalculateCpuLoad()
+{
+  if (NtQuerySystemInformation != NULL) {
+    LONG status;
+    SYSTEM_PERFORMANCE_INFORMATION SysPerfInfo;
+    SYSTEM_TIME_INFORMATION SysTimeInfo;
+    SYSTEM_BASIC_INFORMATION SysBaseInfo;
+
+    // get number of processors in the system
+    status = NtQuerySystemInformation(SystemBasicInformation, &SysBaseInfo, sizeof(SysBaseInfo), NULL);
+    if (status != NO_ERROR)
+      return;
+
+    // get new system time
+    status = NtQuerySystemInformation(SystemTimeInformation, &SysTimeInfo, sizeof(SysTimeInfo), NULL);
+    if (status!=NO_ERROR)
+      return;
+
+    // get new CPU's idle time
+    status = NtQuerySystemInformation(SystemPerformanceInformation, &SysPerfInfo, sizeof(SysPerfInfo), NULL);
+    if (status != NO_ERROR)
+      return;
+
+    // if it's a first call - skip it
+    if (liOldIdleTime.QuadPart != 0)
+    {
+      // CurrentValue = NewValue - OldValue
+      double diffIdleTime = Li2Double(SysPerfInfo.liIdleTime) - Li2Double(liOldIdleTime);
+      double diffSystemTime = Li2Double(SysTimeInfo.liKeSystemTime) - Li2Double(liOldSystemTime);
+
+      // CurrentCpuIdle = IdleTime / SystemTime
+      dbIdleTime = diffIdleTime / diffSystemTime;
+
+      // CurrentCpuUsage% = 100 - (CurrentCpuIdle * 100) / NumberOfProcessors
+      dbIdleTime = 100.0 - dbIdleTime * 100.0 / (double)SysBaseInfo.bKeNumberProcessors + 0.5;
+    }
+
+    // store new CPU's idle and system time
+    liOldIdleTime = SysPerfInfo.liIdleTime;
+    liOldSystemTime = SysTimeInfo.liKeSystemTime;
+  }
+}
+
+
 int CpuMuninNodePlugin::GetValues(char *buffer, int len)
 { 
+  CalculateCpuLoad();
+
+  _snprintf(buffer, len, 
+    "cpu_user.value %f\n"
+    //"cpu_system.value %f\n"
+    ".\n", this->dbIdleTime);
+  return 0;
+
+  /* cant build that
   int index = 0;
   int ret;
   NTSTATUS ntret;
@@ -91,7 +157,7 @@ int CpuMuninNodePlugin::GetValues(char *buffer, int len)
   SYSTEM_INFO SystemInfo;
   GetSystemInfo(&SystemInfo);
 
-  /* We have array for 32 processor only :( */
+  // We have array for 32 processor only :( 
   if (SystemInfo.dwNumberOfProcessors <= 32) {
 
 	  ntret = NtQuerySystemInformation (SystemProcessorPerformanceInformation, (PVOID) spt,
@@ -116,6 +182,7 @@ int CpuMuninNodePlugin::GetValues(char *buffer, int len)
 		  buffer += ret;
 	  }  
   }
+  */
 /* Old wrong code...
   FILETIME IdleTime;
   FILETIME KernelTime;
