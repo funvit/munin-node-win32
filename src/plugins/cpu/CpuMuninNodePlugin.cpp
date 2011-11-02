@@ -46,7 +46,7 @@ CpuMuninNodePlugin::~CpuMuninNodePlugin()
 {
 
 }
-
+/*
 int CpuMuninNodePlugin::GetConfig(char *buffer, int len) 
 {
   int ret = 0;
@@ -91,6 +91,24 @@ int CpuMuninNodePlugin::GetConfig(char *buffer, int len)
 
   strncat(buffer, ".\n", len);
 
+  return 0;
+}*/
+int CpuMuninNodePlugin::GetConfig(char *buffer, int len) 
+{
+  strncpy(buffer, 
+    "graph_args -l 0 --vertical-label percent --upper-limit 100\n"
+    "graph_title Cpu usage\n"
+    "graph_category system\n"
+    "graph_info This graph shows what the machine uses its cpu for.\n"
+    "graph_order cpu_user\n"
+    //"graph_order cpu_system cpu_user\n"
+    "cpu_user.label user\n"
+    "cpu_user.draw AREA\n"
+    "cpu_user.info CPU used by user-space applications.\n"
+    //"cpu_system.label system\n"
+    //"cpu_system.draw STACK\n"
+    //"cpu_system.info CPU used by kernel.\n"
+    ".\n", len);
   return 0;
 }
 
@@ -201,6 +219,6 @@ int CpuMuninNodePlugin::GetValues(char *buffer, int len)
   buffer += ret;
 */
 
-  strncat(buffer, ".\n", len);
-  return 0;
+  //strncat(buffer, ".\n", len);
+  //return 0;
 }
